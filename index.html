@@ -5,63 +5,71 @@
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>FMS Offload Helper</title>
 <style>
-  :root{
-    --bg:#0a0c10; --card:#0f1420; --surface:#111827; --text:#e6edf6; --muted:#93a4b7;
-    --accent:#7c3aed; --accent2:#22d3ee; --ok:#10b981; --bad:#ef4444; --warn:#f59e0b; --border:#1f2a3a;
-  }
+  :root{--bg:#0a0c10;--card:#0f1420;--text:#e6edf6;--muted:#93a4b7;--accent:#7c3aed;--accent2:#22d3ee;--ok:#10b981;--bad:#ef4444;--border:#1f2a3a}
   *{box-sizing:border-box}
   html,body{margin:0;background:radial-gradient(1200px 900px at 10% -10%, #121a2b 0%, transparent 60%), var(--bg);color:var(--text);font-family:Inter,system-ui,Segoe UI,Roboto,Ubuntu,Arial,sans-serif}
   .wrap{max-width:980px;margin:40px auto;padding:0 16px 64px}
-  h1{font-size:26px;margin:0 0 6px;font-weight:800;letter-spacing:.2px}
+  h1{margin:0 0 6px;font-size:26px;font-weight:800}
   .sub{color:var(--muted);margin-bottom:18px}
-
-  .card{background:linear-gradient(180deg, rgba(255,255,255,.02), transparent), var(--card);
-        border:1px solid var(--border); border-radius:18px; padding:18px; box-shadow:0 10px 30px rgba(0,0,0,.35);
-        backdrop-filter: blur(6px);}
+  .card{background:linear-gradient(180deg, rgba(255,255,255,.02), transparent), var(--card);border:1px solid var(--border);border-radius:18px;padding:18px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
   .stack{display:grid;gap:12px}
-
   label{font-size:12px;color:var(--muted);display:block;margin-bottom:6px}
-  input[type=text]{width:220px;background:#0b0f19;border:1px solid var(--border);color:var(--text);
-                   border-radius:14px;padding:10px 12px;font-size:14px;outline:none}
-  textarea{width:100%;min-height:220px;background:#0b0f19;border:1px solid var(--border);color:var(--text);
-           border-radius:14px;padding:12px 14px;font-size:14px;line-height:1.4;resize:vertical;outline:none}
-
+  input[type=text]{width:340px;background:#0b0f19;border:1px solid var(--border);color:var(--text);border-radius:14px;padding:10px 12px;font-size:14px;outline:none}
+  textarea{width:100%;min-height:220px;background:#0b0f19;border:1px solid var(--border);color:var(--text);border-radius:14px;padding:12px 14px;font-size:14px;line-height:1.4;resize:vertical;outline:none}
   .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
   .btn{cursor:pointer;border:1px solid transparent;border-radius:14px;padding:12px 16px;font-weight:700;font-size:14px}
   .btn-primary{background:linear-gradient(90deg,var(--accent),var(--accent2)); color:#060913}
   .btn-ghost{background:transparent;border-color:var(--border);color:var(--text)}
   .btn:disabled{opacity:.6;cursor:not-allowed}
-
   .pill{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;border:1px solid var(--border);background:#0b0f19;font-size:12px;color:var(--muted)}
   .bar{height:12px;border-radius:999px;background:#0b0f19;border:1px solid var(--border);overflow:hidden}
   .fill{height:100%;width:0;background:linear-gradient(90deg,var(--ok),var(--accent2));transition:width .2s ease}
   .muted{color:var(--muted);font-size:12px}
+  .err{color:var(--bad);font-size:12px}
   pre{white-space:pre-wrap;word-break:break-word;background:#0b0f19;border:1px solid var(--border);border-radius:14px;padding:12px;font-size:13px;max-height:420px;overflow:auto}
   .hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
   .brand{display:inline-flex;align-items:center;gap:10px}
   .brand .dot{width:10px;height:10px;border-radius:50%;background:linear-gradient(90deg,var(--accent),var(--accent2));box-shadow:0 0 18px rgba(124,58,237,.7)}
+  .kvs{display:flex;gap:10px;flex-wrap:wrap}
+
+  /* Dropdown modal */
+  .modal-back{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:50}
+  .modal{width:min(840px,92vw);max-height:80vh;background:#0f1420;border:1px solid var(--border);border-radius:18px;box-shadow:0 20px 60px rgba(0,0,0,.6);display:flex;flex-direction:column}
+  .modal header{display:flex;gap:10px;align-items:center;padding:14px 16px;border-bottom:1px solid var(--border)}
+  .modal header input{flex:1;width:auto}
+  .modal .list{overflow:auto}
+  .item{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px dashed #182234;cursor:pointer}
+  .item:hover{background:#0b0f19}
+  .badge{font-size:11px;border:1px solid var(--border);padding:3px 8px;border-radius:999px;color:var(--muted)}
+  .code{font-weight:800;letter-spacing:.3px}
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="hdr">
     <div class="brand"><span class="dot"></span><h1 style="margin:0">FMS Offload Helper</h1></div>
-    <div class="pill">Hard-coded login</div>
+    <div class="pill" id="termStatus">Terminals: —</div>
   </div>
-  <div class="sub">Enter the 3-letter <b>Terminal</b>, paste PROs in any format, then click <b>Run Offload</b>.</div>
+  <div class="sub">Enter a valid <b>Terminal</b> (from live list), paste PROs in any format, then <b>Run Offload</b>. Use <b>Browse</b> to pick from a dropdown.</div>
 
   <div class="card stack">
     <div class="row">
       <div>
-        <label for="terminal">Terminal (3 letters)</label>
-        <input type="text" id="terminal" placeholder="e.g., HAY" maxlength="3" autocomplete="off" />
+        <label for="terminal">Terminal (live-validated)</label>
+        <input type="text" id="terminal" placeholder="e.g., HAY or SEFL-DFW" autocomplete="off"/>
+        <div class="kvs">
+          <div class="muted" id="termMeta">—</div>
+          <div class="err" id="termErr" style="display:none"></div>
+        </div>
       </div>
+      <button class="btn btn-ghost" id="browseTerms">Browse Terminals ⌄</button>
+      <button class="btn btn-ghost" id="refreshTerms">Refresh Terminals</button>
       <span class="pill">Cap: 150 PROs</span>
       <span class="pill">Retries: 2</span>
     </div>
 
     <div>
-      <label for="input">Tracking Numbers (paste anything; we’ll extract 6–14 digit PROs)</label>
+      <label for="input">Tracking Numbers (any separators; we extract 6–14 digit PROs)</label>
       <textarea id="input" placeholder="61807173
 61804271, 61804311
 3178258 3178259
@@ -69,8 +77,8 @@
     </div>
 
     <div class="row">
-      <button class="btn btn-primary" id="run">Run Offload</button>
-      <button class="btn btn-ghost" id="preview">Dry-Run Preview</button>
+      <button class="btn btn-primary" id="run" disabled>Run Offload</button>
+      <button class="btn btn-ghost" id="preview" disabled>Dry-Run Preview</button>
       <button class="btn btn-ghost" id="export" disabled>Export Results (.txt)</button>
     </div>
 
@@ -85,33 +93,49 @@
   <div class="card" style="margin-top:16px">
     <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:6px">
       <strong>Output</strong>
-      <span class="muted">Format: <code>PRO -> DO - successfully offloaded at XXX</code></span>
+      <span class="muted">Format: <code>PRO -> DO - successfully offloaded at TERMINAL</code></span>
     </div>
     <pre id="out"></pre>
+  </div>
+</div>
+
+<!-- Modal for terminal dropdown -->
+<div class="modal-back" id="mb">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mlabel">
+    <header>
+      <strong id="mlabel">Select Terminal</strong>
+      <input type="text" id="msearch" placeholder="Search (code or name)…" autocomplete="off"/>
+      <button class="btn btn-ghost" id="mclose">Close</button>
+    </header>
+    <div class="list" id="mlist"></div>
   </div>
 </div>
 
 <script>
 (() => {
   // =========================
-  // HARD-CODED SETTINGS (edit if needed)
+  // CONFIG
   // =========================
-  const BASE         = "https://fms.item.com";  // If using a local proxy, change to its origin.
-  const COMPANY_ID   = "SBFH";
-  const FMS_CLIENT   = "FMS_WEB";
-  const USERNAME     = "cmosqueda";
-  const PASSWORD     = "cam2121";
-  const MAX_ORDERS   = 150;
-  const RETRIES      = 2;
+  const BASE       = "https://fms.item.com";           // Change to your proxy origin if needed
+  const COMPANY_ID = "SBFH";
+  const FMS_CLIENT = "FMS_WEB";
+  const USERNAME   = "cmosqueda";
+  const PASSWORD   = "cam2121";
+  const MAX_ORDERS = 150;
+  const RETRIES    = 2;
 
-  // Endpoints
-  const LOGIN_URL    = `${BASE}/fms-platform-user/Auth/Login`;
-  const SEARCH_URL   = `${BASE}/fms-platform-order/shipment-orders/query`;
-  const OFFLOAD_URL  = `${BASE}/fms-platform-order/status/shipment/set-offload`;
+  // Required endpoints
+  const LOGIN_URL  = `${BASE}/fms-platform-user/Auth/Login`;
+  const SEARCH_URL = `${BASE}/fms-platform-order/shipment-orders/query`;
+  const OFFLOAD_URL= `${BASE}/fms-platform-order/status/shipment/set-offload`;
+
+  // Terminal list endpoint (per your request)
+  const TERM_URL   = `${BASE}/fms-platform-dispatch-management/public-location/current-company-terminals?terminalType=0`;
 
   // DOM
   const $ = id => document.getElementById(id);
-  const termEl = $("terminal");
+  const termInput = $("terminal");
+  const termMeta = $("termMeta"), termErr = $("termErr"), termStatus = $("termStatus");
   const input  = $("input");
   const runBtn = $("run");
   const prevBtn= $("preview");
@@ -121,14 +145,21 @@
   const eta    = $("eta");
   const fill   = $("fill");
   const counts = $("counts");
+  const refreshBtn = $("refreshTerms");
+  const browseBtn  = $("browseTerms");
+
+  // Modal
+  const mb = $("mb"), mlist = $("mlist"), msearch = $("msearch"), mclose = $("mclose");
+
+  // State
+  let TOKEN = null;
+  let TERMS = [];              // [{value, text, terminal_type}]
+  let TERM_MAP = new Map();    // value -> object
 
   // Helpers
-  const now = () => Date.now();
-  termEl.addEventListener("input", () => { termEl.value = termEl.value.toUpperCase().replace(/[^A-Z]/g,"").slice(0,3); });
-
-  function parsePros(text){
-    return (text.match(/\b\d{6,14}\b/g) || []);
-  }
+  function kCanonical(x){ return String(x||"").trim().toUpperCase(); }
+  function parsePros(text){ return (text.match(/\b\d{6,14}\b/g) || []); }
+  function now(){ return Date.now(); }
   function setProg(done,total,startTs){
     const frac = total? (done/total) : 0;
     fill.style.width = (frac*100).toFixed(0)+"%";
@@ -140,25 +171,112 @@
     eta.textContent = `ETA ${isFinite(rem)?fmt(rem):"—"}`;
   }
   function fmt(sec){
-    sec = Math.max(0,Math.floor(sec));
-    const m = Math.floor(sec/60), s = sec%60;
+    sec = Math.max(0,Math.floor(sec)); const m=Math.floor(sec/60), s=sec%60;
     return m? `${m}m ${String(s).padStart(2,"0")}s` : `${s}s`;
   }
   function line(msg){ out.textContent += (out.textContent? "\n":"") + msg; }
   function resetOutput(){ out.textContent=""; setProg(0,0,now()); status.textContent="Idle"; eta.textContent="ETA —"; }
+  function disableRun(disabled=true){ runBtn.disabled = disabled; prevBtn.disabled = disabled; }
+  function showErr(msg){ termErr.style.display="block"; termErr.textContent = msg; }
+  function hideErr(){ termErr.style.display="none"; termErr.textContent = ""; }
 
-  // API
-  async function auth(){
+  termInput.addEventListener("input", () => {
+    const pos = termInput.selectionStart;
+    termInput.value = kCanonical(termInput.value);
+    termInput.setSelectionRange(pos,pos);
+    validateTerminal();
+  });
+
+  // Auth
+  async function auth(force=false){
+    if (TOKEN && !force) return TOKEN;
     const headers = {"fms-client":FMS_CLIENT,"Content-Type":"application/json"};
     const body = { account: USERNAME, password: PASSWORD };
     const r = await fetch(LOGIN_URL,{method:"POST",headers,body:JSON.stringify(body)});
     if (!r.ok) throw new Error(`Auth HTTP ${r.status}`);
     const j = await r.json().catch(()=> ({}));
-    const token = j.token || j?.data?.token || j?.result?.token || "";
-    if (!token) throw new Error("No token returned");
-    return token;
+    TOKEN = j.token || j?.data?.token || j?.result?.token || "";
+    if (!TOKEN) throw new Error("No token returned");
+    return TOKEN;
   }
 
+  // Load terminals
+  async function fetchTerminals(){
+    const token = await auth();
+    const headers = {
+      "accept":"application/json, text/plain, */*",
+      "fms-client": FMS_CLIENT,
+      "fms-token": token,
+      "company-id": COMPANY_ID,
+      "actual-operate-time": new Date().toISOString().slice(0,10)
+    };
+    const r = await fetch(TERM_URL,{method:"GET",headers});
+    if (!r.ok) throw new Error(`Terminal list HTTP ${r.status}`);
+    const j = await r.json();
+    const items = j?.data?.items || [];
+    TERMS = [];
+    TERM_MAP.clear();
+    const counts = {REVENUE:0, CONTRACT:0, RETAILER_DISTRIBUTION_CENTER:0, OTHER:0};
+
+    for (const it of items){
+      const value = kCanonical(it.value);
+      if (!value) continue;
+      const row = { value, text: it.text || value, terminal_type: it.terminal_type || "OTHER" };
+      TERMS.push(row);
+      TERM_MAP.set(value, row);
+      if (counts[row.terminal_type] !== undefined) counts[row.terminal_type]++; else counts.OTHER++;
+    }
+    TERMS.sort((a,b)=>a.value.localeCompare(b.value));
+
+    termStatus.textContent = TERMS.length ? `Terminals: ${TERMS.length} ✓` : `Terminals: 0`;
+    termMeta.textContent = TERMS.length
+      ? `Loaded • Revenue ${counts.REVENUE||0} • Contract ${counts.CONTRACT||0} • Retail ${counts.RETAILER_DISTRIBUTION_CENTER||0}`
+      : "—";
+
+    // render modal list
+    renderList();
+    validateTerminal();
+    return TERMS.length;
+  }
+
+  function validateTerminal(){
+    hideErr();
+    const key = kCanonical(termInput.value);
+    const ok = key && TERM_MAP.has(key);
+    disableRun(!ok);
+    if (!key){ showErr("Enter a terminal or click Browse."); return; }
+    if (!ok){ showErr("Not in live list. Pick from Browse or refresh terminals."); return; }
+  }
+
+  function renderList(filter=""){
+    const q = kCanonical(filter);
+    mlist.innerHTML = "";
+    for (const t of TERMS){
+      if (q && !(t.value.includes(q) || kCanonical(t.text).includes(q))) continue;
+      const el = document.createElement("div");
+      el.className = "item";
+      el.innerHTML = `
+        <div><span class="code">${t.value}</span> — <span class="muted">${t.text.replace(/</g,"&lt;")}</span></div>
+        <span class="badge">${t.terminal_type}</span>`;
+      el.addEventListener("click", ()=>{
+        termInput.value = t.value;
+        closeModal();
+        validateTerminal();
+      });
+      mlist.appendChild(el);
+    }
+    if (!mlist.children.length){
+      const none = document.createElement("div");
+      none.className = "item";
+      none.innerHTML = `<div class="muted">No matches</div>`;
+      mlist.appendChild(none);
+    }
+  }
+
+  function openModal(){ mb.style.display="flex"; msearch.value=""; renderList(); msearch.focus(); }
+  function closeModal(){ mb.style.display="none"; }
+
+  // Search & Offload
   async function searchOrders(token, tracking_nos){
     const headers = {
       "fms-client":FMS_CLIENT,
@@ -260,8 +378,9 @@
   async function run(dry=false){
     resetOutput();
     try{
-      const terminal = termEl.value.trim().toUpperCase();
-      if (!/^[A-Z]{3}$/.test(terminal)) throw new Error("Terminal must be 3 letters (e.g., HAY).");
+      const termKey = kCanonical(termInput.value);
+      if (!termKey || !TERM_MAP.has(termKey)) throw new Error("Please choose a valid terminal from the live list.");
+      const terminal = TERM_MAP.get(termKey).value;
 
       const prosAll = parsePros(input.value);
       if (!prosAll.length) throw new Error("No PROs found.");
@@ -294,7 +413,7 @@
         overflow.forEach(p=>line(`  ${p}`));
       }
       status.textContent = dry ? "Dry-run complete" : "Done";
-      expBtn.disabled = false;
+      expBtn.disabled = !out.textContent.trim();
     }catch(e){
       status.textContent = "Error";
       line(`[Error] ${e.message||e}`);
@@ -302,6 +421,7 @@
     }
   }
 
+  // Events
   runBtn.addEventListener("click", ()=> run(false));
   prevBtn.addEventListener("click", ()=> run(true));
   expBtn.addEventListener("click", ()=>{
@@ -312,6 +432,29 @@
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(()=>URL.revokeObjectURL(a.href), 800);
   });
+  refreshBtn.addEventListener("click", async ()=>{
+    disableRun(true);
+    termMeta.textContent = "Refreshing…";
+    try{ await fetchTerminals(); }catch(e){ termMeta.textContent = "Failed to load terminals"; console.error(e); }
+  });
+
+  // Browse (dropdown) interactions
+  browseBtn.addEventListener("click", openModal);
+  mclose.addEventListener("click", closeModal);
+  mb.addEventListener("click", (e)=>{ if (e.target===mb) closeModal(); });
+  msearch.addEventListener("input", ()=> renderList(msearch.value));
+  window.addEventListener("keydown",(e)=>{ if(e.key==="Escape") closeModal(); });
+
+  // Initial boot
+  (async ()=>{
+    try{
+      termMeta.textContent = "Loading terminals…";
+      await fetchTerminals();
+    }catch(e){
+      termMeta.textContent = "Failed to load terminals — try Refresh";
+      console.error(e);
+    }
+  })();
 })();
 </script>
 </body>
