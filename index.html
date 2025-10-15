@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>FMS Offload Helper</title>
+<style>
+  :root{
+    --bg:#0a0c10; --card:#0f1420; --surface:#111827; --text:#e6edf6; --muted:#93a4b7;
+    --accent:#7c3aed; --accent2:#22d3ee; --ok:#10b981; --bad:#ef4444; --warn:#f59e0b; --border:#1f2a3a;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:radial-gradient(1200px 900px at 10% -10%, #121a2b 0%, transparent 60%), var(--bg);color:var(--text);font-family:Inter,system-ui,Segoe UI,Roboto,Ubuntu,Arial,sans-serif}
+  .wrap{max-width:980px;margin:40px auto;padding:0 16px 64px}
+  h1{font-size:26px;margin:0 0 6px;font-weight:800;letter-spacing:.2px}
+  .sub{color:var(--muted);margin-bottom:18px}
+
+  .card{background:linear-gradient(180deg, rgba(255,255,255,.02), transparent), var(--card);
+        border:1px solid var(--border); border-radius:18px; padding:18px; box-shadow:0 10px 30px rgba(0,0,0,.35);
+        backdrop-filter: blur(6px);}
+  .stack{display:grid;gap:12px}
+
+  label{font-size:12px;color:var(--muted);display:block;margin-bottom:6px}
+  input[type=text]{width:220px;background:#0b0f19;border:1px solid var(--border);color:var(--text);
+                   border-radius:14px;padding:10px 12px;font-size:14px;outline:none}
+  textarea{width:100%;min-height:220px;background:#0b0f19;border:1px solid var(--border);color:var(--text);
+           border-radius:14px;padding:12px 14px;font-size:14px;line-height:1.4;resize:vertical;outline:none}
+
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .btn{cursor:pointer;border:1px solid transparent;border-radius:14px;padding:12px 16px;font-weight:700;font-size:14px}
+  .btn-primary{background:linear-gradient(90deg,var(--accent),var(--accent2)); color:#060913}
+  .btn-ghost{background:transparent;border-color:var(--border);color:var(--text)}
+  .btn:disabled{opacity:.6;cursor:not-allowed}
+
+  .pill{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;border:1px solid var(--border);background:#0b0f19;font-size:12px;color:var(--muted)}
+  .bar{height:12px;border-radius:999px;background:#0b0f19;border:1px solid var(--border);overflow:hidden}
+  .fill{height:100%;width:0;background:linear-gradient(90deg,var(--ok),var(--accent2));transition:width .2s ease}
+  .muted{color:var(--muted);font-size:12px}
+  pre{white-space:pre-wrap;word-break:break-word;background:#0b0f19;border:1px solid var(--border);border-radius:14px;padding:12px;font-size:13px;max-height:420px;overflow:auto}
+  .hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+  .brand{display:inline-flex;align-items:center;gap:10px}
+  .brand .dot{width:10px;height:10px;border-radius:50%;background:linear-gradient(90deg,var(--accent),var(--accent2));box-shadow:0 0 18px rgba(124,58,237,.7)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hdr">
+    <div class="brand"><span class="dot"></span><h1 style="margin:0">FMS Offload Helper</h1></div>
+    <div class="pill">Hard-coded login</div>
+  </div>
+  <div class="sub">Enter the 3-letter <b>Terminal</b>, paste PROs in any format, then click <b>Run Offload</b>.</div>
+
+  <div class="card stack">
+    <div class="row">
+      <div>
+        <label for="terminal">Terminal (3 letters)</label>
+        <input type="text" id="terminal" placeholder="e.g., HAY" maxlength="3" autocomplete="off" />
+      </div>
+      <span class="pill">Cap: 150 PROs</span>
+      <span class="pill">Retries: 2</span>
+    </div>
+
+    <div>
+      <label for="input">Tracking Numbers (paste anything; we’ll extract 6–14 digit PROs)</label>
+      <textarea id="input" placeholder="61807173
+61804271, 61804311
+3178258 3178259
+18391571"></textarea>
+    </div>
+
+    <div class="row">
+      <button class="btn btn-primary" id="run">Run Offload</button>
+      <button class="btn btn-ghost" id="preview">Dry-Run Preview</button>
+      <button class="btn btn-ghost" id="export" disabled>Export Results (.txt)</button>
+    </div>
+
+    <div class="row" style="justify-content:space-between">
+      <div class="muted" id="status">Idle</div>
+      <div class="muted" id="eta">ETA —</div>
+    </div>
+    <div class="bar"><div class="fill" id="fill"></div></div>
+    <div class="muted" id="counts">0/0</div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:6px">
+      <strong>Output</strong>
+      <span class="muted">Format: <code>PRO -> DO - successfully offloaded at XXX</code></span>
+    </div>
+    <pre id="out"></pre>
+  </div>
+</div>
+
+<script>
+(() => {
+  // =========================
+  // HARD-CODED SETTINGS (edit if needed)
+  // =========================
+  const BASE         = "https://fms.item.com";  // If using a local proxy, change to its origin.
+  const COMPANY_ID   = "SBFH";
+  const FMS_CLIENT   = "FMS_WEB";
+  const USERNAME     = "cmosqueda";
+  const PASSWORD     = "cam2121";
+  const MAX_ORDERS   = 150;
+  const RETRIES      = 2;
+
+  // Endpoints
+  const LOGIN_URL    = `${BASE}/fms-platform-user/Auth/Login`;
+  const SEARCH_URL   = `${BASE}/fms-platform-order/shipment-orders/query`;
+  const OFFLOAD_URL  = `${BASE}/fms-platform-order/status/shipment/set-offload`;
+
+  // DOM
+  const $ = id => document.getElementById(id);
+  const termEl = $("terminal");
+  const input  = $("input");
+  const runBtn = $("run");
+  const prevBtn= $("preview");
+  const expBtn = $("export");
+  const out    = $("out");
+  const status = $("status");
+  const eta    = $("eta");
+  const fill   = $("fill");
+  const counts = $("counts");
+
+  // Helpers
+  const now = () => Date.now();
+  termEl.addEventListener("input", () => { termEl.value = termEl.value.toUpperCase().replace(/[^A-Z]/g,"").slice(0,3); });
+
+  function parsePros(text){
+    return (text.match(/\b\d{6,14}\b/g) || []);
+  }
+  function setProg(done,total,startTs){
+    const frac = total? (done/total) : 0;
+    fill.style.width = (frac*100).toFixed(0)+"%";
+    counts.textContent = `${done}/${total}`;
+    if (!total){ eta.textContent = "ETA —"; return; }
+    const elapsed = (Date.now()-startTs)/1000;
+    const rate = done ? done/elapsed : 0;
+    const rem = rate ? (total-done)/rate : Infinity;
+    eta.textContent = `ETA ${isFinite(rem)?fmt(rem):"—"}`;
+  }
+  function fmt(sec){
+    sec = Math.max(0,Math.floor(sec));
+    const m = Math.floor(sec/60), s = sec%60;
+    return m? `${m}m ${String(s).padStart(2,"0")}s` : `${s}s`;
+  }
+  function line(msg){ out.textContent += (out.textContent? "\n":"") + msg; }
+  function resetOutput(){ out.textContent=""; setProg(0,0,now()); status.textContent="Idle"; eta.textContent="ETA —"; }
+
+  // API
+  async function auth(){
+    const headers = {"fms-client":FMS_CLIENT,"Content-Type":"application/json"};
+    const body = { account: USERNAME, password: PASSWORD };
+    const r = await fetch(LOGIN_URL,{method:"POST",headers,body:JSON.stringify(body)});
+    if (!r.ok) throw new Error(`Auth HTTP ${r.status}`);
+    const j = await r.json().catch(()=> ({}));
+    const token = j.token || j?.data?.token || j?.result?.token || "";
+    if (!token) throw new Error("No token returned");
+    return token;
+  }
+
+  async function searchOrders(token, tracking_nos){
+    const headers = {
+      "fms-client":FMS_CLIENT,
+      "fms-token":token,
+      "Content-Type":"application/json",
+      "Company-Id": COMPANY_ID
+    };
+    const body = {
+      bill_to_accounts:[], bols:[], business_client:"",
+      consignee_state:[], consignee_terminals:[], consignee_zip_codes:[],
+      current_locations:[], customer_references:[], delayed:false,
+      delivery_appointment:[], delivery_date:[], desired_delivery_date:[],
+      exception:false, hold:false, lh_eta_date:[], lh_etd_date:[],
+      lhs:[], master_order_ids:[], order_nos:[], origin_states:[],
+      origin_zip_codes:[], page_number:1, page_size: Math.min(tracking_nos.length, MAX_ORDERS),
+      pickup_appointment:[], pickup_complete_date:[], po_nos:[], pu_nos:[],
+      record_status:"0", request_pickup_date:[], service_levels:[],
+      service_terminals:[], shipment_types:[], shipper_terminals:[],
+      status:[], sub_status:[], tracking_nos, trips:[]
+    };
+    const r = await fetch(SEARCH_URL,{method:"POST",headers,body:JSON.stringify(body)});
+    if (!r.ok) throw new Error(`Search HTTP ${r.status}`);
+    return r.json();
+  }
+
+  function buildMap(searchJson){
+    const map = {};
+    let items = [];
+    if (Array.isArray(searchJson?.items)) items = searchJson.items;
+    else if (Array.isArray(searchJson?.data?.items)) items = searchJson.data.items;
+
+    for (const it of items){
+      const pro = String(it.tracking_no ?? it.trackingNo ?? "").trim();
+      const order = String(it.order_no ?? it.orderNo ?? "").trim();
+      if (/^\d{6,14}$/.test(pro) && /^DO\d{6,}$/.test(order)) map[pro] = order;
+    }
+    return map;
+  }
+
+  function extractKey(DO){
+    const m = String(DO).match(/\bDO(\d{6,})\b/i);
+    return m ? m[1] : null;
+  }
+
+  async function offloadAll({token, terminal, pairs}){
+    const headers = {
+      "Accept":"application/json, text/plain, */*",
+      "Content-Type":"application/json",
+      "fms-client": FMS_CLIENT,
+      "fms-token": token,
+      "company-id": COMPANY_ID,
+      "actual-operate-time": new Date().toISOString().slice(0,10)
+    };
+    const start = now();
+    const total = pairs.length;
+    const results = [];
+    setProg(0,total,start);
+
+    for (let i=0;i<pairs.length;i++){
+      const [pro, DO] = pairs[i];
+      const key = extractKey(DO);
+      let ok = false;
+      if (key){
+        const payload = { order_status:"Override Offload", order_keys:[Number(key)], terminal };
+        for (let a=0;a<=RETRIES;a++){
+          try{
+            const r = await fetch(OFFLOAD_URL,{method:"POST",headers,body:JSON.stringify(payload)});
+            if (r.ok){
+              const j = await r.json().catch(()=> ({}));
+              if (String(j.status||"").toLowerCase()!=="fail" && j.is_success!==false && (j.code==null || j.code>0)){
+                ok = true; break;
+              }
+            }
+          }catch(_e){}
+        }
+      }
+      results.push(ok
+        ? `${pro} -> ${DO} - successfully offloaded at ${terminal}`
+        : `${pro} -> ${DO} - offload at ${terminal} failed`);
+      setProg(i+1,total,start);
+    }
+    return results;
+  }
+
+  async function previewAll({terminal, pairs}){
+    const start = now(); const total = pairs.length;
+    setProg(0,total,start);
+    const out = [];
+    for (let i=0;i<pairs.length;i++){
+      const [pro, DO] = pairs[i];
+      const key = extractKey(DO);
+      out.push(`${pro} -> ${DO} - DRY RUN (payload: ${JSON.stringify({order_status:"Override Offload", order_keys:[Number(key)], terminal})})`);
+      setProg(i+1,total,start);
+    }
+    return out;
+  }
+
+  // Main
+  async function run(dry=false){
+    resetOutput();
+    try{
+      const terminal = termEl.value.trim().toUpperCase();
+      if (!/^[A-Z]{3}$/.test(terminal)) throw new Error("Terminal must be 3 letters (e.g., HAY).");
+
+      const prosAll = parsePros(input.value);
+      if (!prosAll.length) throw new Error("No PROs found.");
+      const overflow = prosAll.length>MAX_ORDERS ? prosAll.slice(MAX_ORDERS) : [];
+      const tracking = prosAll.slice(0,MAX_ORDERS);
+
+      status.textContent = "Authenticating…";
+      const token = await auth();
+
+      status.textContent = `Searching ${tracking.length} order(s)…`;
+      const data = await searchOrders(token, tracking);
+
+      const map = buildMap(data);
+      const pairs = []; const missing=[];
+      for (const p of tracking){ map[p] ? pairs.push([p,map[p]]) : missing.push(p); }
+
+      line(`Mapped ${pairs.length} PRO→DO; ${missing.length} without DO.`);
+      if (dry){
+        status.textContent = `Previewing ${pairs.length} mapped order(s)…`;
+        const preview = await previewAll({terminal, pairs});
+        preview.forEach(line);
+      }else{
+        status.textContent = `Offloading ${pairs.length} mapped order(s) at ${terminal}…`;
+        const results = await offloadAll({token, terminal, pairs});
+        results.forEach(line);
+      }
+      for (const p of missing) line(`${p} -> (no DO found) - not offloaded`);
+      if (overflow.length){
+        line(`NOT OFFLOADED (over ${MAX_ORDERS} cap):`);
+        overflow.forEach(p=>line(`  ${p}`));
+      }
+      status.textContent = dry ? "Dry-run complete" : "Done";
+      expBtn.disabled = false;
+    }catch(e){
+      status.textContent = "Error";
+      line(`[Error] ${e.message||e}`);
+      console.error(e);
+    }
+  }
+
+  runBtn.addEventListener("click", ()=> run(false));
+  prevBtn.addEventListener("click", ()=> run(true));
+  expBtn.addEventListener("click", ()=>{
+    const blob = new Blob([out.textContent],{type:"text/plain;charset=utf-8"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `fms_offload_results_${new Date().toISOString().replace(/[:.]/g,"-")}.txt`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 800);
+  });
+})();
+</script>
+</body>
+</html>
